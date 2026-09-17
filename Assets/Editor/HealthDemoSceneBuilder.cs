@@ -13,9 +13,15 @@ using UnityEngine.UI;
 public static class HealthDemoSceneBuilder
 {
     private const string ScenePath = "Assets/Scenes/HealthDemo.unity";
+    private const string ButtonNormalSpritePath = "Assets/My Assets/Fantasy Wooden GUI/TextBTN_Big.png";
+    private const string ButtonPressedSpritePath = "Assets/My Assets/Fantasy Wooden GUI/TextBTN_Big_Pressed.png";
+    private const string HandCursorPath = "Assets/My Assets/UI/hand_cursor.png";
     private const int MaximumHealth = 100;
     private const int SimulatedDamage = 10;
     private const int SimulatedHeal = 10;
+
+    private static readonly Color WoodenTint = new Color(0.7547f, 0.6372f, 0.6372f);
+    private static readonly Color SceneBackgroundColor = new Color(0.08f, 0.08f, 0.10f);
 
     [MenuItem("Tools/Health Demo/Build Demo Scene")]
     public static void BuildFromMenu()
@@ -44,6 +50,8 @@ public static class HealthDemoSceneBuilder
 
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
+        CreateCamera();
+
         GameObject root = new GameObject("HealthDemo");
         root.SetActive(false);
 
@@ -64,10 +72,8 @@ public static class HealthDemoSceneBuilder
             new Color(0.30f, 0.80f, 0.35f), resources, health, false);
         CreateBar(canvas.transform, "SmoothHealthBar", "Плавный бар здоровья", new Vector2(0f, -310f),
             new Color(0.95f, 0.62f, 0.20f), resources, health, true);
-        CreateButton(canvas.transform, "DamageButton", "Урон -10", new Vector2(-170f, -400f),
-            resources, simulator.TakeDamage);
-        CreateButton(canvas.transform, "HealButton", "Лечение +10", new Vector2(170f, -400f),
-            resources, simulator.Heal);
+        CreateButton(canvas.transform, "DamageButton", "Урон -10", new Vector2(-170f, -400f), simulator.TakeDamage);
+        CreateButton(canvas.transform, "HealButton", "Лечение +10", new Vector2(170f, -400f), simulator.Heal);
 
         new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
 
@@ -141,7 +147,7 @@ public static class HealthDemoSceneBuilder
     private static void CreateBar(Transform parent, string name, string caption, Vector2 position,
         Color fillColor, DefaultControls.Resources resources, Health health, bool smooth)
     {
-        CreateCaption(parent, caption, new Vector2(position.x, position.y + 40f));
+        CreateBarCaption(parent, caption, new Vector2(position.x, position.y + 40f));
 
         GameObject sliderObject = DefaultControls.CreateSlider(resources);
         sliderObject.name = name;
@@ -176,33 +182,67 @@ public static class HealthDemoSceneBuilder
         SerializedPropertyUtility.SetObjectReference(view, "_slider", slider);
     }
 
-    private static void CreateCaption(Transform parent, string text, Vector2 position)
+    private static void CreateCaption(Transform parent, string name, string text, float fontSize, Color color)
     {
-        RectTransform rect = CreateElement($"{text}Caption", parent);
-        AnchorTop(rect, position, new Vector2(400f, 30f));
+        RectTransform rect = CreateElement(name, parent);
+        Stretch(rect);
 
         TextMeshProUGUI label = rect.gameObject.AddComponent<TextMeshProUGUI>();
         label.font = TMP_Settings.defaultFontAsset;
         label.text = text;
-        label.fontSize = 26f;
-        label.color = new Color(0.82f, 0.82f, 0.82f);
+        label.fontSize = fontSize;
+        label.color = color;
         label.alignment = TextAlignmentOptions.Center;
     }
 
-    private static void CreateButton(Transform parent, string name, string label, Vector2 position,
-        DefaultControls.Resources resources, UnityAction onClick)
+    private static void CreateBarCaption(Transform parent, string text, Vector2 position)
     {
-        GameObject buttonObject = DefaultControls.CreateButton(resources);
-        buttonObject.name = name;
-        buttonObject.transform.SetParent(parent, false);
+        RectTransform rect = CreateElement($"{text}Caption", parent);
+        AnchorTop(rect, position, new Vector2(400f, 30f));
+        CreateCaption(rect, "Label", text, 26f, new Color(0.82f, 0.82f, 0.82f));
+    }
 
+    private static void Stretch(RectTransform rect)
+    {
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
+    private static void CreateCamera()
+    {
+        GameObject cameraObject = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener));
+        cameraObject.tag = "MainCamera";
+        cameraObject.transform.position = new Vector3(0f, 0f, -10f);
+
+        Camera camera = cameraObject.GetComponent<Camera>();
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        camera.backgroundColor = SceneBackgroundColor;
+    }
+
+    private static void CreateButton(Transform parent, string name, string caption, Vector2 position, UnityAction onClick)
+    {
+        GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(HoverCursor));
         RectTransform rect = (RectTransform)buttonObject.transform;
-        AnchorTop(rect, position, new Vector2(300f, 80f));
+        rect.SetParent(parent, false);
+        AnchorTop(rect, position, new Vector2(336f, 112f));
 
-        Text buttonText = buttonObject.GetComponentInChildren<Text>();
-        buttonText.text = label;
+        Image image = buttonObject.GetComponent<Image>();
+        image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(ButtonNormalSpritePath);
+        image.color = WoodenTint;
 
         Button button = buttonObject.GetComponent<Button>();
+        button.targetGraphic = image;
+        button.spriteState = new SpriteState
+        {
+            pressedSprite = AssetDatabase.LoadAssetAtPath<Sprite>(ButtonPressedSpritePath)
+        };
+
+        HoverCursor hoverCursor = buttonObject.GetComponent<HoverCursor>();
+        SerializedPropertyUtility.SetObjectReference(hoverCursor, "_handCursor", AssetDatabase.LoadAssetAtPath<Texture2D>(HandCursorPath));
+
+        CreateCaption(rect, "Caption", caption, 32f, Color.white);
         UnityEventTools.AddPersistentListener(button.onClick, onClick);
     }
 

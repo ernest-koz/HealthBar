@@ -30,6 +30,7 @@ public static class HealthDemoSceneValidator
         Canvas canvas = root.GetComponentInChildren<Canvas>();
         ThrowIfNull(canvas, "Canvas not found");
         ThrowIfNull(UnityEngine.Object.FindObjectOfType<EventSystem>(), "EventSystem not found");
+        ThrowIfNull(UnityEngine.Object.FindObjectOfType<Camera>(), "Main Camera not found");
 
         ValidateHealthText(canvas, health);
         ValidateBar(canvas, "InstantHealthBar", health, false);
@@ -89,6 +90,11 @@ public static class HealthDemoSceneValidator
 
         Button button = host.GetComponent<Button>();
         ThrowIfNull(button, $"{name} has no Button");
+
+        Image image = host.GetComponent<Image>();
+        ThrowIfNull(image, $"{name} has no Image");
+        ThrowIfNull(image.sprite, $"{name} has no sprite");
+        ThrowIfNull(host.GetComponent<HoverCursor>(), $"{name} has no HoverCursor");
 
         AssertEqual(button.onClick.GetPersistentEventCount(), 1, $"{name}.onClick persistent calls");
         AssertReference(button.onClick.GetPersistentTarget(0), simulator, $"{name}.onClick target");
