@@ -12,7 +12,8 @@ public class HoverCursor : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
     {
         if (_handCursor == null)
         {
-            Debug.LogError($"Hand cursor texture is not assigned on {gameObject.name}", gameObject);
+            Debug.LogError($"{nameof(HoverCursor)} hand cursor not assigned on {gameObject.name}.", gameObject);
+            enabled = false;
         }
     }
 
@@ -25,11 +26,15 @@ public class HoverCursor : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
         }
     }
 
-    public void OnPointerEnter(PointerEventData eventData) =>
+    public void OnPointerEnter(PointerEventData eventData)
+    {
         ShowHand();
+    }
 
-    public void OnPointerExit(PointerEventData eventData) =>
+    public void OnPointerExit(PointerEventData eventData)
+    {
         HideHand();
+    }
 
     private void ShowHand()
     {

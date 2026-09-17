@@ -28,6 +28,8 @@ public abstract class HealthView : MonoBehaviour
 
     protected virtual void Start()
     {
+        // Порядок Awake между объектами не гарантирован: рендер в OnEnable мог пройти
+        // до Health.Awake и показать Current = 0. К Start все Awake уже выполнены.
         Render(Health.Current, Health.Maximum);
     }
 

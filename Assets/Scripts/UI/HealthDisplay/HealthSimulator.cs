@@ -17,11 +17,21 @@ public class HealthSimulator : MonoBehaviour
 
     public void TakeDamage()
     {
+        if (_health == null)
+        {
+            return;
+        }
+
         _health.TakeDamage(_damageAmount, transform.position);
     }
 
     public void Heal()
     {
+        if (_health == null)
+        {
+            return;
+        }
+
         _health.Heal(_healAmount);
     }
 }

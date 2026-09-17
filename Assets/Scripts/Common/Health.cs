@@ -28,6 +28,8 @@ public class Health : MonoBehaviour, ITargetable
         _current = _maximum;
     }
 
+    // Контракт: тикер внешний. Health — leaf-сервис и не читает Time.*;
+    // агрегат боя вызывает Tick(Time.deltaTime) каждый кадр (в демо — не тикает).
     public void Tick(float deltaTime)
     {
         if (deltaTime <= 0f)

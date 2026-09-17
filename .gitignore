@@ -125,3 +125,7 @@ InitTestScene*.unity*
 
 # Project documentation (kept locally, not version-controlled)
 /docs/
+
+# Editor-only scene tools (kept locally, not version-controlled):
+# scene builder/validator are local teaching tools; the built scene is committed
+/Assets/Editor/
