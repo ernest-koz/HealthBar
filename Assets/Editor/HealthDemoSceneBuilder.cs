@@ -1,23 +1,40 @@
-using System.IO;
+using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEditor;
 using UnityEditor.Events;
-using UnityEditor.PackageManager;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public static class HealthDemoSceneBuilder
 {
     private const string ScenePath = "Assets/Scenes/HealthDemo.unity";
-    private const string TmpEssentialsResource = "TMP Settings";
-    private const int MaxHealth = 100;
-    private const int ChangeAmount = 10;
-
-    private static readonly Vector2 CenterAnchor = new Vector2(0.5f, 0.5f);
+    private const int MaximumHealth = 100;
+    private const int SimulatedDamage = 10;
+    private const int SimulatedHeal = 10;
 
     [MenuItem("Tools/Health Demo/Build Demo Scene")]
+    public static void BuildFromMenu()
+    {
+        Build();
+    }
+
+    [MenuItem("Tools/Health Demo/Validate Demo Scene")]
+    public static void ValidateFromMenu()
+    {
+        ValidateSavedScene();
+    }
+
+    public static void ValidateSavedScene()
+    {
+        EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        HealthDemoSceneValidator.Validate(ScenePath);
+    }
+
     public static void Build()
     {
         if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo() == false)
@@ -25,303 +42,198 @@ public static class HealthDemoSceneBuilder
             return;
         }
 
-        ImportTmpEssentials();
-        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-        Health health = BuildHealth();
-        Canvas canvas = BuildCanvas();
-        TMP_FontAsset font = FindDefaultFont();
+        GameObject root = new GameObject("HealthDemo");
+        root.SetActive(false);
 
-        BuildLabel(canvas.transform, "Title", "Health Demo", 36, TextAlignmentOptions.Center, font, new Vector2(0f, 250f), new Vector2(600f, 60f));
-        BuildTextIndicator(canvas, font, health);
-        BuildLabel(canvas.transform, "Instant Caption", "Instant", 22, TextAlignmentOptions.Right, font, new Vector2(-310f, 70f), new Vector2(120f, 26f));
-        BuildLabel(canvas.transform, "Smooth Caption", "Smooth", 22, TextAlignmentOptions.Right, font, new Vector2(-310f, 20f), new Vector2(120f, 26f));
+        Health health = root.AddComponent<Health>();
+        SerializedPropertyUtility.SetInteger(health, "_maximum", MaximumHealth);
+        SerializedPropertyUtility.SetFloat(health, "_invincibilityTime", 0f);
 
-        Slider instantBar = BuildSlider(canvas, "Instant Bar", new Vector2(0f, 70f), new Color(0.25f, 0.70f, 0.30f));
-        Slider smoothBar = BuildSlider(canvas, "Smooth Bar", new Vector2(0f, 20f), new Color(0.30f, 0.60f, 0.90f));
+        HealthSimulator simulator = root.AddComponent<HealthSimulator>();
+        SerializedPropertyUtility.SetObjectReference(simulator, "_health", health);
+        SerializedPropertyUtility.SetInteger(simulator, "_damageAmount", SimulatedDamage);
+        SerializedPropertyUtility.SetInteger(simulator, "_healAmount", SimulatedHeal);
 
-        AttachBarView<HealthBar>(instantBar, health);
-        AttachBarView<SmoothHealthBar>(smoothBar, health);
-        BuildSimulator(canvas, font, health);
+        Canvas canvas = CreateCanvas(root.transform);
+        DefaultControls.Resources resources = CreateResources();
 
-        Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
-        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), ScenePath);
-        EditorUtility.DisplayDialog("Health Demo", $"Scene built: {ScenePath}\n\nPress Play and use the buttons.", "OK");
-        EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath));
-    }
+        CreateHealthText(canvas.transform, health);
+        CreateBar(canvas.transform, "InstantHealthBar", "Бар здоровья", new Vector2(0f, -220f),
+            new Color(0.30f, 0.80f, 0.35f), resources, health, false);
+        CreateBar(canvas.transform, "SmoothHealthBar", "Плавный бар здоровья", new Vector2(0f, -310f),
+            new Color(0.95f, 0.62f, 0.20f), resources, health, true);
+        CreateButton(canvas.transform, "DamageButton", "Урон -10", new Vector2(-170f, -400f),
+            resources, simulator.TakeDamage);
+        CreateButton(canvas.transform, "HealButton", "Лечение +10", new Vector2(170f, -400f),
+            resources, simulator.Heal);
 
-    private static void ImportTmpEssentials()
-    {
-        if (Resources.Load<TMP_Settings>(TmpEssentialsResource) == null)
-        {
-            ImportTmpEssentialsPackage();
-        }
-    }
-
-    private static void ImportTmpEssentialsPackage()
-    {
-        PackageInfo package = PackageInfo.FindForAssetPath("Packages/com.unity.textmeshpro");
-
-        if (package == null)
-        {
-            Debug.LogError("TextMesh Pro package is missing. Import TMP Essential Resources manually: Window → TextMeshPro → Import TMP Essential Resources.");
-            return;
-        }
-
-        string essentialsPath = Path.Combine(package.assetPath, "Package Resources", "TMP Essential Resources.unitypackage");
-
-        if (File.Exists(essentialsPath) == false)
-        {
-            Debug.LogError($"TMP essentials not found at {essentialsPath}. Import them manually: Window → TextMeshPro → Import TMP Essential Resources.");
-            return;
-        }
-
-        AssetDatabase.ImportPackage(essentialsPath, false);
-    }
-
-    private static Health BuildHealth()
-    {
-        GameObject player = new GameObject("Player");
-        Health health = player.AddComponent<Health>();
-        SetValue(health, "_maximum", MaxHealth);
-        SetValue(health, "_invincibilityTime", 0f);
-        return health;
-    }
-
-    private static Canvas BuildCanvas()
-    {
         new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
 
-        GameObject canvasGo = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        Canvas canvas = canvasGo.GetComponent<Canvas>();
+        root.SetActive(true);
+
+        EditorSceneManager.SaveScene(scene, ScenePath);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        AddSceneToBuildSettings();
+
+        Debug.Log($"[HealthDemoSceneBuilder] Scene saved to {ScenePath}.");
+    }
+
+    private static void AddSceneToBuildSettings()
+    {
+        if (ContainsScene(EditorBuildSettings.scenes))
+        {
+            return;
+        }
+
+        List<EditorBuildSettingsScene> scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+        scenes.Add(new EditorBuildSettingsScene(ScenePath, true));
+        EditorBuildSettings.scenes = scenes.ToArray();
+    }
+
+    private static bool ContainsScene(EditorBuildSettingsScene[] scenes)
+    {
+        foreach (EditorBuildSettingsScene scene in scenes)
+        {
+            if (scene.path == ScenePath)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static Canvas CreateCanvas(Transform parent)
+    {
+        GameObject canvasObject = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasObject.transform.SetParent(parent, false);
+
+        Canvas canvas = canvasObject.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
 
-        CanvasScaler scaler = canvasGo.GetComponent<CanvasScaler>();
+        CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1280f, 720f);
-        scaler.matchWidthOrHeight = 0.5f;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+
         return canvas;
     }
 
-    private static void BuildTextIndicator(Canvas canvas, TMP_FontAsset font, Health health)
+    private static void CreateHealthText(Transform parent, Health health)
     {
-        TextMeshProUGUI label = BuildLabel(canvas.transform, "Health Text", $"{MaxHealth}/{MaxHealth}", 56, TextAlignmentOptions.Center, font, new Vector2(0f, 150f), new Vector2(400f, 70f));
-        HealthText view = label.gameObject.AddComponent<HealthText>();
-        SetReference(view, "_health", health);
-        SetReference(view, "_text", label);
-    }
+        RectTransform rect = CreateElement("HealthText", parent);
+        AnchorTop(rect, new Vector2(0f, -120f), new Vector2(500f, 70f));
 
-    private static Slider BuildSlider(Canvas canvas, string name, Vector2 position, Color fillColor)
-    {
-        GameObject sliderGo = new GameObject(name, typeof(RectTransform), typeof(Slider));
-        RectTransform sliderRect = (RectTransform)sliderGo.transform;
-        sliderRect.SetParent(canvas.transform, false);
-        Place(sliderRect, position, new Vector2(480f, 24f));
-
-        Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-
-        Image background = BuildImage(sliderRect, "Background", uiSprite, new Color(0.18f, 0.18f, 0.18f));
-        Stretch(background.rectTransform, new Vector2(0f, 0.25f), new Vector2(1f, 0.75f));
-
-        RectTransform fillArea = CreateRect(sliderRect, "Fill Area");
-        Stretch(fillArea, new Vector2(0f, 0.25f), new Vector2(1f, 0.75f));
-        fillArea.offsetMin = new Vector2(10f, 0f);
-        fillArea.offsetMax = new Vector2(-10f, 0f);
-
-        Image fill = BuildImage(fillArea, "Fill", uiSprite, fillColor);
-        Stretch(fill.rectTransform, Vector2.zero, Vector2.one);
-
-        RectTransform handleArea = CreateRect(sliderRect, "Handle Slide Area");
-        Stretch(handleArea, Vector2.zero, Vector2.one);
-        handleArea.offsetMin = new Vector2(10f, 0f);
-        handleArea.offsetMax = new Vector2(-10f, 0f);
-
-        Image handle = BuildImage(handleArea, "Handle", uiSprite, Color.white);
-        handle.rectTransform.anchorMin = new Vector2(0f, 0f);
-        handle.rectTransform.anchorMax = new Vector2(0f, 1f);
-        handle.rectTransform.sizeDelta = new Vector2(20f, -4f);
-
-        Slider slider = sliderGo.GetComponent<Slider>();
-        slider.fillRect = fill.rectTransform;
-        slider.handleRect = handle.rectTransform;
-        slider.targetGraphic = handle;
-        slider.direction = Slider.Direction.LeftToRight;
-        slider.wholeNumbers = true;
-        return slider;
-    }
-
-    private static void BuildSimulator(Canvas canvas, TMP_FontAsset font, Health health)
-    {
-        GameObject simulatorGo = new GameObject("Simulator");
-        HealthSimulator simulator = simulatorGo.AddComponent<HealthSimulator>();
-        SetReference(simulator, "_health", health);
-        SetValue(simulator, "_damageAmount", ChangeAmount);
-        SetValue(simulator, "_healAmount", ChangeAmount);
-
-        Button damageButton = BuildButton(canvas.transform, "Damage Button", "Damage -10", new Vector2(-130f, -140f), new Color(0.80f, 0.30f, 0.25f), font);
-        Button healButton = BuildButton(canvas.transform, "Heal Button", "Heal +10", new Vector2(130f, -140f), new Color(0.35f, 0.70f, 0.35f), font);
-
-        UnityEventTools.AddPersistentListener(damageButton.onClick, simulator.TakeDamage);
-        UnityEventTools.AddPersistentListener(healButton.onClick, simulator.Heal);
-    }
-
-    private static Button BuildButton(Transform parent, string name, string caption, Vector2 position, Color color, TMP_FontAsset font)
-    {
-        GameObject buttonGo = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-        RectTransform buttonRect = (RectTransform)buttonGo.transform;
-        buttonRect.SetParent(parent, false);
-        Place(buttonRect, position, new Vector2(200f, 56f));
-
-        Image image = buttonGo.GetComponent<Image>();
-        image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-        image.type = Image.Type.Sliced;
-        image.color = color;
-
-        CreateLabel(buttonRect, "Caption", caption, 26, TextAlignmentOptions.Center, font);
-
-        return buttonGo.GetComponent<Button>();
-    }
-
-    private static T AttachBarView<T>(Slider slider, Health health) where T : HealthBar
-    {
-        T view = slider.gameObject.AddComponent<T>();
-        SetReference(view, "_health", health);
-        SetReference(view, "_slider", slider);
-        return view;
-    }
-
-    private static TextMeshProUGUI BuildLabel(Transform parent, string name, string caption, float fontSize, TextAlignmentOptions alignment, TMP_FontAsset font, Vector2 position, Vector2 size)
-    {
-        TextMeshProUGUI label = CreateLabel(parent, name, caption, fontSize, alignment, font);
-        Place((RectTransform)label.transform, position, size);
-        return label;
-    }
-
-    private static TextMeshProUGUI CreateLabel(Transform parent, string name, string caption, float fontSize, TextAlignmentOptions alignment, TMP_FontAsset font)
-    {
-        GameObject labelGo = new GameObject(name, typeof(RectTransform));
-        RectTransform labelRect = (RectTransform)labelGo.transform;
-        labelRect.SetParent(parent, false);
-        Stretch(labelRect, Vector2.zero, Vector2.one);
-
-        TextMeshProUGUI label = labelGo.AddComponent<TextMeshProUGUI>();
-        AssignFont(label, font);
-        label.text = caption;
-        label.fontSize = fontSize;
-        label.alignment = alignment;
+        TextMeshProUGUI label = rect.gameObject.AddComponent<TextMeshProUGUI>();
+        label.font = TMP_Settings.defaultFontAsset;
+        label.text = $"{health.Maximum}/{health.Maximum}";
+        label.fontSize = 54f;
         label.color = Color.white;
-        return label;
+        label.alignment = TextAlignmentOptions.Center;
+
+        HealthText view = rect.gameObject.AddComponent<HealthText>();
+        SerializedPropertyUtility.SetObjectReference(view, "_health", health);
+        SerializedPropertyUtility.SetObjectReference(view, "_text", label);
     }
 
-    private static Image BuildImage(Transform parent, string name, Sprite sprite, Color color)
+    private static void CreateBar(Transform parent, string name, string caption, Vector2 position,
+        Color fillColor, DefaultControls.Resources resources, Health health, bool smooth)
     {
-        Image image = CreateRect(parent, name).gameObject.AddComponent<Image>();
-        image.sprite = sprite;
-        image.type = Image.Type.Sliced;
-        image.color = color;
-        return image;
-    }
+        CreateCaption(parent, caption, new Vector2(position.x, position.y + 40f));
 
-    private static RectTransform CreateRect(Transform parent, string name)
-    {
-        GameObject rectGo = new GameObject(name, typeof(RectTransform));
-        RectTransform rect = (RectTransform)rectGo.transform;
-        rect.SetParent(parent, false);
-        return rect;
-    }
+        GameObject sliderObject = DefaultControls.CreateSlider(resources);
+        sliderObject.name = name;
+        sliderObject.transform.SetParent(parent, false);
 
-    private static TMP_FontAsset FindDefaultFont()
-    {
-        string[] guids = AssetDatabase.FindAssets("t:TMP_FontAsset");
+        RectTransform rect = (RectTransform)sliderObject.transform;
+        AnchorTop(rect, position, new Vector2(640f, 32f));
 
-        foreach (string guid in guids)
+        Slider slider = sliderObject.GetComponent<Slider>();
+        slider.transition = Selectable.Transition.None;
+        slider.interactable = false;
+        slider.maxValue = MaximumHealth;
+        slider.value = MaximumHealth;
+
+        Image background = sliderObject.transform.Find("Background").GetComponent<Image>();
+        background.color = new Color(0.12f, 0.12f, 0.12f, 0.9f);
+
+        Image fill = sliderObject.transform.Find("Fill Area/Fill").GetComponent<Image>();
+        fill.color = fillColor;
+
+        HealthBar view;
+        if (smooth)
         {
-            string path = AssetDatabase.GUIDToAssetPath(guid);
-            TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);
-
-            if (font == null)
-            {
-                continue;
-            }
-
-            if (font.name.Contains("LiberationSans"))
-            {
-                return font;
-            }
+            view = sliderObject.AddComponent<SmoothHealthBar>();
+        }
+        else
+        {
+            view = sliderObject.AddComponent<HealthBar>();
         }
 
-        return null;
+        SerializedPropertyUtility.SetObjectReference(view, "_health", health);
+        SerializedPropertyUtility.SetObjectReference(view, "_slider", slider);
     }
 
-    private static void AssignFont(TMP_Text label, TMP_FontAsset font)
+    private static void CreateCaption(Transform parent, string text, Vector2 position)
     {
-        if (font == null)
-        {
-            return;
-        }
+        RectTransform rect = CreateElement($"{text}Caption", parent);
+        AnchorTop(rect, position, new Vector2(400f, 30f));
 
-        label.font = font;
+        TextMeshProUGUI label = rect.gameObject.AddComponent<TextMeshProUGUI>();
+        label.font = TMP_Settings.defaultFontAsset;
+        label.text = text;
+        label.fontSize = 26f;
+        label.color = new Color(0.82f, 0.82f, 0.82f);
+        label.alignment = TextAlignmentOptions.Center;
     }
 
-    private static void SetReference(Object owner, string propertyName, Object value)
+    private static void CreateButton(Transform parent, string name, string label, Vector2 position,
+        DefaultControls.Resources resources, UnityAction onClick)
     {
-        SerializedObject serialized = new SerializedObject(owner);
-        SerializedProperty property = serialized.FindProperty(propertyName);
+        GameObject buttonObject = DefaultControls.CreateButton(resources);
+        buttonObject.name = name;
+        buttonObject.transform.SetParent(parent, false);
 
-        if (property == null)
-        {
-            Debug.LogError($"{owner.GetType().Name} has no serialized property {propertyName}.");
-            return;
-        }
+        RectTransform rect = (RectTransform)buttonObject.transform;
+        AnchorTop(rect, position, new Vector2(300f, 80f));
 
-        property.objectReferenceValue = value;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
+        Text buttonText = buttonObject.GetComponentInChildren<Text>();
+        buttonText.text = label;
+
+        Button button = buttonObject.GetComponent<Button>();
+        UnityEventTools.AddPersistentListener(button.onClick, onClick);
     }
 
-    private static void SetValue(Object owner, string propertyName, int value)
+    private static RectTransform CreateElement(string name, Transform parent)
     {
-        SerializedObject serialized = new SerializedObject(owner);
-        SerializedProperty property = serialized.FindProperty(propertyName);
+        GameObject element = new GameObject(name, typeof(RectTransform));
+        element.transform.SetParent(parent, false);
 
-        if (property == null)
-        {
-            Debug.LogError($"{owner.GetType().Name} has no serialized property {propertyName}.");
-            return;
-        }
-
-        property.intValue = value;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
+        return (RectTransform)element.transform;
     }
 
-    private static void SetValue(Object owner, string propertyName, float value)
+    private static void AnchorTop(RectTransform rect, Vector2 position, Vector2 size)
     {
-        SerializedObject serialized = new SerializedObject(owner);
-        SerializedProperty property = serialized.FindProperty(propertyName);
-
-        if (property == null)
-        {
-            Debug.LogError($"{owner.GetType().Name} has no serialized property {propertyName}.");
-            return;
-        }
-
-        property.floatValue = value;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
-    }
-
-    private static void Place(RectTransform rect, Vector2 position, Vector2 size)
-    {
-        rect.anchorMin = CenterAnchor;
-        rect.anchorMax = CenterAnchor;
-        rect.pivot = CenterAnchor;
-        rect.sizeDelta = size;
+        rect.anchorMin = new Vector2(0.5f, 1f);
+        rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
         rect.anchoredPosition = position;
+        rect.sizeDelta = size;
     }
 
-    private static void Stretch(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax)
+    private static DefaultControls.Resources CreateResources()
     {
-        rect.anchorMin = anchorMin;
-        rect.anchorMax = anchorMax;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
+        return new DefaultControls.Resources
+        {
+            standard = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd"),
+            background = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd"),
+            inputField = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/InputFieldBackground.psd"),
+            knob = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd"),
+            checkmark = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Checkmark.psd"),
+            dropdown = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/DropdownArrow.psd"),
+            mask = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UIMask.psd")
+        };
     }
 }
