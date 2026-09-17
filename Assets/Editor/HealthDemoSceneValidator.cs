@@ -10,6 +10,8 @@ public static class HealthDemoSceneValidator
     private const int ExpectedMaximum = 100;
     private const int ExpectedDamage = 10;
     private const int ExpectedHeal = 10;
+    private const float ExpectedFillSpeed = 0.2f;
+    private const string DeathMessageText = "Юнит умер, лечение не поможет";
 
     public static void Validate(string scenePath)
     {
@@ -38,13 +40,30 @@ public static class HealthDemoSceneValidator
 
         ValidateButton(canvas, "DamageButton", simulator, nameof(HealthSimulator.TakeDamage));
         ValidateButton(canvas, "HealButton", simulator, nameof(HealthSimulator.Heal));
+        ValidateDeathMessage(canvas, health);
 
         Debug.Log($"[HealthDemoSceneValidator] {scenePath} is valid: health, three indicators and two buttons are wired.");
     }
 
+    private static void ValidateDeathMessage(Canvas canvas, Health health)
+    {
+        Transform host = canvas.transform.Find("Panel/DeathMessage");
+        ThrowIfNull(host, "DeathMessage label not found");
+
+        TextMeshProUGUI label = host.GetComponent<TextMeshProUGUI>();
+        ThrowIfNull(label, "DeathMessage has no TextMeshProUGUI");
+        AssertEqual(label.text, DeathMessageText, "DeathMessage.text");
+        AssertEqual(label.enabled, false, "DeathMessage hidden at start");
+
+        DeathMessage view = host.GetComponent<DeathMessage>();
+        ThrowIfNull(view, "DeathMessage view not found");
+        AssertReference(GetReference(view, "_health"), health, "DeathMessage._health");
+        AssertReference(GetReference(view, "_text"), label, "DeathMessage._text");
+    }
+
     private static void ValidateHealthText(Canvas canvas, Health health)
     {
-        Transform host = canvas.transform.Find("HealthText");
+        Transform host = canvas.transform.Find("Panel/HealthText");
         ThrowIfNull(host, "HealthText label not found");
 
         TextMeshProUGUI label = host.GetComponent<TextMeshProUGUI>();
@@ -58,7 +77,7 @@ public static class HealthDemoSceneValidator
 
     private static void ValidateBar(Canvas canvas, string name, Health health, bool smooth)
     {
-        Transform host = canvas.transform.Find(name);
+        Transform host = canvas.transform.Find($"Panel/{name}");
         ThrowIfNull(host, $"{name} slider not found");
 
         Slider slider = host.GetComponent<Slider>();
@@ -72,7 +91,7 @@ public static class HealthDemoSceneValidator
         if (smooth)
         {
             ThrowIfNull(host.GetComponent<SmoothHealthBar>(), $"{name} must use SmoothHealthBar");
-            AssertEqual(GetFloat(view, "_fillSpeed"), 0.5f, $"{name}._fillSpeed");
+            AssertEqual(GetFloat(view, "_fillSpeed"), ExpectedFillSpeed, $"{name}._fillSpeed");
         }
         else
         {
@@ -85,7 +104,7 @@ public static class HealthDemoSceneValidator
 
     private static void ValidateButton(Canvas canvas, string name, HealthSimulator simulator, string methodName)
     {
-        Transform host = canvas.transform.Find(name);
+        Transform host = canvas.transform.Find($"Panel/{name}");
         ThrowIfNull(host, $"{name} not found");
 
         Button button = host.GetComponent<Button>();

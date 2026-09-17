@@ -19,9 +19,14 @@ public static class HealthDemoSceneBuilder
     private const int MaximumHealth = 100;
     private const int SimulatedDamage = 10;
     private const int SimulatedHeal = 10;
+    private const float SmoothFillSpeed = 0.2f;
+    private const float ButtonCaptionLift = 16f;
+    private const string DeathMessageText = "Юнит умер, лечение не поможет";
 
     private static readonly Color WoodenTint = new Color(0.7547f, 0.6372f, 0.6372f);
     private static readonly Color SceneBackgroundColor = new Color(0.08f, 0.08f, 0.10f);
+    private static readonly Color PanelColor = new Color(0f, 0f, 0f, 0.55f);
+    private static readonly Color DeathMessageColor = new Color(0.90f, 0.45f, 0.40f);
 
     [MenuItem("Tools/Health Demo/Build Demo Scene")]
     public static void BuildFromMenu()
@@ -67,13 +72,16 @@ public static class HealthDemoSceneBuilder
         Canvas canvas = CreateCanvas(root.transform);
         DefaultControls.Resources resources = CreateResources();
 
-        CreateHealthText(canvas.transform, health);
-        CreateBar(canvas.transform, "InstantHealthBar", "Бар здоровья", new Vector2(0f, -220f),
+        RectTransform panel = CreatePanel(canvas.transform);
+
+        CreateHealthText(panel, health);
+        CreateBar(panel, "InstantHealthBar", "Бар здоровья", new Vector2(0f, -240f),
             new Color(0.30f, 0.80f, 0.35f), resources, health, false);
-        CreateBar(canvas.transform, "SmoothHealthBar", "Плавный бар здоровья", new Vector2(0f, -310f),
+        CreateBar(panel, "SmoothHealthBar", "Плавный бар здоровья", new Vector2(0f, -380f),
             new Color(0.95f, 0.62f, 0.20f), resources, health, true);
-        CreateButton(canvas.transform, "DamageButton", "Урон -10", new Vector2(-170f, -400f), simulator.TakeDamage);
-        CreateButton(canvas.transform, "HealButton", "Лечение +10", new Vector2(170f, -400f), simulator.Heal);
+        CreateButton(panel, "DamageButton", "Урон -10", new Vector2(-230f, -560f), simulator.TakeDamage);
+        CreateButton(panel, "HealButton", "Лечение +10", new Vector2(230f, -560f), simulator.Heal);
+        CreateDeathMessage(panel, health);
 
         new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
 
@@ -127,10 +135,22 @@ public static class HealthDemoSceneBuilder
         return canvas;
     }
 
+    private static RectTransform CreatePanel(Transform parent)
+    {
+        RectTransform panel = CreateElement("Panel", parent);
+        AnchorTop(panel, new Vector2(0f, -110f), new Vector2(1240f, 860f));
+
+        Image image = panel.gameObject.AddComponent<Image>();
+        image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+        image.type = Image.Type.Sliced;
+        image.color = PanelColor;
+        return panel;
+    }
+
     private static void CreateHealthText(Transform parent, Health health)
     {
         RectTransform rect = CreateElement("HealthText", parent);
-        AnchorTop(rect, new Vector2(0f, -120f), new Vector2(500f, 70f));
+        AnchorTop(rect, new Vector2(0f, -80f), new Vector2(500f, 70f));
 
         TextMeshProUGUI label = rect.gameObject.AddComponent<TextMeshProUGUI>();
         label.font = TMP_Settings.defaultFontAsset;
@@ -154,7 +174,7 @@ public static class HealthDemoSceneBuilder
         sliderObject.transform.SetParent(parent, false);
 
         RectTransform rect = (RectTransform)sliderObject.transform;
-        AnchorTop(rect, position, new Vector2(640f, 32f));
+        AnchorTop(rect, position, new Vector2(1000f, 50f));
 
         Slider slider = sliderObject.GetComponent<Slider>();
         slider.transition = Selectable.Transition.None;
@@ -172,6 +192,7 @@ public static class HealthDemoSceneBuilder
         if (smooth)
         {
             view = sliderObject.AddComponent<SmoothHealthBar>();
+            SerializedPropertyUtility.SetFloat(view, "_fillSpeed", SmoothFillSpeed);
         }
         else
         {
@@ -182,10 +203,11 @@ public static class HealthDemoSceneBuilder
         SerializedPropertyUtility.SetObjectReference(view, "_slider", slider);
     }
 
-    private static void CreateCaption(Transform parent, string name, string text, float fontSize, Color color)
+    private static void CreateCaption(Transform parent, string name, string text, float fontSize, Color color, float bottomOffset)
     {
         RectTransform rect = CreateElement(name, parent);
         Stretch(rect);
+        rect.offsetMin = new Vector2(0f, bottomOffset);
 
         TextMeshProUGUI label = rect.gameObject.AddComponent<TextMeshProUGUI>();
         label.font = TMP_Settings.defaultFontAsset;
@@ -199,7 +221,7 @@ public static class HealthDemoSceneBuilder
     {
         RectTransform rect = CreateElement($"{text}Caption", parent);
         AnchorTop(rect, position, new Vector2(400f, 30f));
-        CreateCaption(rect, "Label", text, 26f, new Color(0.82f, 0.82f, 0.82f));
+        CreateCaption(rect, "Label", text, 26f, new Color(0.82f, 0.82f, 0.82f), 0f);
     }
 
     private static void Stretch(RectTransform rect)
@@ -242,8 +264,26 @@ public static class HealthDemoSceneBuilder
         HoverCursor hoverCursor = buttonObject.GetComponent<HoverCursor>();
         SerializedPropertyUtility.SetObjectReference(hoverCursor, "_handCursor", AssetDatabase.LoadAssetAtPath<Texture2D>(HandCursorPath));
 
-        CreateCaption(rect, "Caption", caption, 32f, Color.white);
+        CreateCaption(rect, "Caption", caption, 32f, Color.white, ButtonCaptionLift);
         UnityEventTools.AddPersistentListener(button.onClick, onClick);
+    }
+
+    private static void CreateDeathMessage(Transform parent, Health health)
+    {
+        RectTransform rect = CreateElement("DeathMessage", parent);
+        AnchorTop(rect, new Vector2(0f, -700f), new Vector2(1000f, 50f));
+
+        TextMeshProUGUI label = rect.gameObject.AddComponent<TextMeshProUGUI>();
+        label.font = TMP_Settings.defaultFontAsset;
+        label.text = DeathMessageText;
+        label.fontSize = 30f;
+        label.color = DeathMessageColor;
+        label.alignment = TextAlignmentOptions.Center;
+        label.enabled = false;
+
+        DeathMessage view = rect.gameObject.AddComponent<DeathMessage>();
+        SerializedPropertyUtility.SetObjectReference(view, "_health", health);
+        SerializedPropertyUtility.SetObjectReference(view, "_text", label);
     }
 
     private static RectTransform CreateElement(string name, Transform parent)
