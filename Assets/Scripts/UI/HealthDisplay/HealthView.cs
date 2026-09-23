@@ -6,15 +6,6 @@ public abstract class HealthView : MonoBehaviour
 
     protected Health Health => _health;
 
-    protected virtual void Awake()
-    {
-        if (_health == null)
-        {
-            Debug.LogError($"{nameof(HealthView)} health not assigned on {gameObject.name}.", gameObject);
-            enabled = false;
-        }
-    }
-
     protected virtual void OnEnable()
     {
         Health.Changed += Render;
@@ -28,6 +19,14 @@ public abstract class HealthView : MonoBehaviour
     protected virtual void OnDisable()
     {
         Health.Changed -= Render;
+    }
+
+    protected virtual void OnValidate()
+    {
+        if (_health == null)
+        {
+            Debug.LogError($"{nameof(HealthView)} health not assigned on {gameObject.name}.", gameObject);
+        }
     }
 
     protected abstract void Render(int current, int maximum);

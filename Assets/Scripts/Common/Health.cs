@@ -24,12 +24,15 @@ public class Health : MonoBehaviour
             return;
         }
 
-        if (IsAlive == false)
+        int previous = Current;
+
+        Current = Mathf.Max(previous - amount, 0);
+
+        if (Current == previous)
         {
             return;
         }
 
-        Current = Mathf.Max(Current - amount, 0);
         Changed?.Invoke(Current, _maximum);
 
         if (Current == 0)
@@ -38,28 +41,22 @@ public class Health : MonoBehaviour
         }
     }
 
-    public bool Heal(int amount)
+    public void ReceiveHealing(int amount)
     {
         if (amount <= 0)
         {
-            return false;
+            return;
         }
 
-        if (IsAlive == false)
+        int previous = Current;
+
+        Current = Mathf.Min(previous + amount, _maximum);
+
+        if (Current == previous)
         {
-            return false;
+            return;
         }
 
-        if (Current >= _maximum)
-        {
-            return false;
-        }
-
-        int missing = _maximum - Current;
-        int restored = Mathf.Min(amount, missing);
-        Current += restored;
         Changed?.Invoke(Current, _maximum);
-
-        return true;
     }
 }

@@ -8,21 +8,20 @@ public class HoverCursor : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
 
     private bool _isHandShown;
 
-    private void Awake()
-    {
-        if (_handCursor == null)
-        {
-            Debug.LogError($"{nameof(HoverCursor)} hand cursor not assigned on {gameObject.name}.", gameObject);
-            enabled = false;
-        }
-    }
-
     private void OnDisable()
     {
         if (_isHandShown)
         {
             Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
             _isHandShown = false;
+        }
+    }
+
+    private void OnValidate()
+    {
+        if (_handCursor == null)
+        {
+            Debug.LogError($"{nameof(HoverCursor)} hand cursor not assigned on {gameObject.name}.", gameObject);
         }
     }
 
@@ -38,11 +37,6 @@ public class HoverCursor : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
 
     private void ShowHand()
     {
-        if (_handCursor == null)
-        {
-            return;
-        }
-
         Cursor.SetCursor(_handCursor, _hotspot, CursorMode.Auto);
         _isHandShown = true;
     }

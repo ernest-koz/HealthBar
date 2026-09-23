@@ -7,19 +7,20 @@ public class HealthBar : HealthView
 
     protected Slider Slider => _slider;
 
-    protected override void Awake()
+    private void Awake()
     {
-        base.Awake();
+        _slider.minValue = 0f;
+        _slider.maxValue = 1f;
+    }
+
+    protected override void OnValidate()
+    {
+        base.OnValidate();
 
         if (_slider == null)
         {
             Debug.LogError($"{nameof(HealthBar)} slider not assigned on {gameObject.name}.", gameObject);
-            enabled = false;
-            return;
         }
-
-        _slider.minValue = 0f;
-        _slider.maxValue = 1f;
     }
 
     protected float CalculateRatio(int current, int maximum)
